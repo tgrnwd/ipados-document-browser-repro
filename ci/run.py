@@ -138,18 +138,26 @@ def kick(seconds=90):
     for the data volume at startup; in the cold passes it happened to start a few seconds before
     the seed's lookup, in the real app it starts only at that lookup and the lookup fails."""
     docid_state("before kick")
-    code = run(["xcrun", "simctl", "spawn", device, "launchctl", "kickstart", "system/com.apple.revisiond"],
-               "kickstart", check=False)
+    # launchd_sim hosts daemons in the user/foreground domain; "system/..." only warns
+    # (rdar://78126471 in its own output, run 34009201672) and starts nothing.
+    job = "user/foreground/com.apple.revisiond"
+    run(["xcrun", "simctl", "spawn", device, "launchctl", "print", job], "launchctl-print-before", check=False)
+    code = run(["xcrun", "simctl", "spawn", device, "launchctl", "kickstart", job], "kickstart", check=False)
     if code:
         run(["xcrun", "simctl", "spawn", device, "launchctl", "start", "com.apple.revisiond"],
             "launchctl-start", check=False)
     started = time.monotonic()
+    library = revisions_library()
     while time.monotonic() - started < seconds:
         state = docid_state("kick poll")
-        if state["library_status"]:
-            time.sleep(3)
+        # metadata and db-V1 appear at library creation; LibraryStatus can be written later.
+        if (library / "metadata").is_file() and (library / "db-V1").is_dir():
+            time.sleep(10)
+            run(["xcrun", "simctl", "spawn", device, "launchctl", "print", job], "launchctl-print-after", check=False)
+            docid_state("kick settled")
             return round(time.monotonic() - started, 1)
         time.sleep(2)
+    run(["xcrun", "simctl", "spawn", device, "launchctl", "print", job], "launchctl-print-after", check=False)
     return None
 
 
