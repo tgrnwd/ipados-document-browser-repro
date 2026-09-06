@@ -13,11 +13,25 @@ final class DocumentUITests: XCTestCase {
         let stem = (name as NSString).deletingPathExtension
         let cell = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", stem)).firstMatch
         if !cell.waitForExistence(timeout: 8) {
+            // Cold browser, run 34007744965: one tap on the Browse segment left "No Recents" on
+            // screen and the seed was never enumerated. Tap again rather than fail on the tap;
+            // the tile itself is still asserted below.
             let browse = app.buttons["Browse"].firstMatch
             XCTAssertTrue(browse.waitForExistence(timeout: 10))
-            browse.tap()
+            for attempt in 1...3 {
+                browse.tap()
+                print("BROWSE-TAP attempt=\(attempt) selected=\(browse.isSelected)")
+                if cell.waitForExistence(timeout: 10) { break }
+                // Browse may land in the locations list instead of this app's folder.
+                let folder = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", "DocumentBrowserProbe")).firstMatch
+                if folder.exists {
+                    print("BROWSE-FOLDER attempt=\(attempt)")
+                    folder.tap()
+                    if cell.waitForExistence(timeout: 10) { break }
+                }
+            }
         }
-        XCTAssertTrue(cell.waitForExistence(timeout: 15), "Document tile missing: \(name)")
+        XCTAssertTrue(cell.waitForExistence(timeout: 5), "Document tile missing: \(name)")
         cell.tap()
     }
 
