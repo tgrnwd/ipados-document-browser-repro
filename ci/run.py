@@ -106,7 +106,10 @@ try:
     runtimes = json.loads(capture(["xcrun", "simctl", "list", "runtimes", "--json"], "runtimes"))["runtimes"]
     runtime = max((r for r in runtimes if r.get("isAvailable") and r["name"].startswith("iOS 26.")),
                   key=lambda r: tuple(int(v) for v in r["version"].split(".")))["identifier"]
-    device = capture(["xcrun", "simctl", "create", "Document browser repro", "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5", runtime], "create")
+    device_types = json.loads(capture(["xcrun", "simctl", "list", "devicetypes", "--json"], "device-types"))["devicetypes"]
+    matching_types = [entry for entry in device_types if entry["name"] == "iPad Pro 13-inch (M5)"]
+    assert len(matching_types) == 1, "Expected iPad Pro 13-inch (M5) device type is unavailable"
+    device = capture(["xcrun", "simctl", "create", "Document browser repro", matching_types[0]["identifier"], runtime], "create")
     run(["defaults", "write", "com.apple.iphonesimulator", "ConnectHardwareKeyboard", "-bool", "false"], "keyboard")
     run(["xcrun", "simctl", "boot", device], "boot")
     run(["open", "-a", "Simulator", "--args", "-CurrentDeviceUDID", device], "simulator")
