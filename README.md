@@ -21,13 +21,13 @@ Every run builds its own app/test products and creates its own simulator. The se
 
 Artifacts contain the environment version, per-stage logs, document-service logs, native `.xcresult` bundles, and video (compressed when the encoder is available). Artifacts expire after one day. Standard hosted runner time is free for public repositories; storage remains subject to the account's applicable limits. No billing settings are changed by this workflow.
 
-In [run 34007744965](https://github.com/tgrnwd/ipados-document-browser-repro/actions/runs/34007744965), commit `9337dde`, on iPadOS 26.5:
+Completed runs on iPadOS 26.5, using the standard `macos-26` runner:
 
-| Mode | Result | Whole job |
-| --- | --- | --- |
-| `prepared` | Both tests passed; zero skips | 12m10s |
-| `cold` | Seed tile was not found; create/save/reopen passed; zero skips | 11m31s |
+| Mode | Result | Whole job | Evidence |
+| --- | --- | --- | --- |
+| `cold` | Both tests passed; zero skips | 7m16s | [34008472728, commit 9dfd025](https://github.com/tgrnwd/ipados-document-browser-repro/actions/runs/34008472728) |
+| `prepared` | Both tests passed; zero skips | 12m10s | [34007744965, commit 9337dde](https://github.com/tgrnwd/ipados-document-browser-repro/actions/runs/34007744965/job/101417955051) |
 
-The cold video remained on Recents after the Browse tap; that test never attempted to open the seed. Browser navigation now checks progress with bounded attempts so the cold comparison can reach the intended operation. The prepared system log shows the recreated seed received a different document ID and resolved successfully, even after another app-container relocation. This is one successful generic sequence, not proof of a workaround for another application's failure or certification of another application's test suite.
+The first cold attempt at commit `9337dde` failed before opening the seed: its video remained on Recents after the Browse tap. Browser navigation now checks progress with bounded attempts. The corrected cold run passed without recreating its seed, so the prepared sequence has not been shown necessary for this app. The prepared system log also shows its recreated seed received a different document ID and resolved successfully, even after another app-container relocation. These are successful generic sequences, not proof of a workaround for another application's failure or certification of another application's test suite.
 
 License: GPL-3.0-only; see [LICENSE](LICENSE).
