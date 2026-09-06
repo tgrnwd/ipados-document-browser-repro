@@ -13,7 +13,7 @@ import time
 if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
     raise SystemExit("Run this through the manual GitHub Actions workflow.")
 mode = sys.argv[1]
-assert mode in ("cold", "prepared", "warm")
+assert mode in ("cold", "prepared", "warm", "kick")
 # sys/stat.h: "UF_TRACKED is used for dealing with document IDs."
 UF_TRACKED = 0x40
 root = Path.cwd()
@@ -132,6 +132,27 @@ def warm(seed, seconds=300):
     return observed
 
 
+def kick(seconds=90):
+    """Deterministic priming candidate, no UI: start revisiond inside the simulator before any
+    document is enumerated. Its launchd job (RunAtLoad, KeepAlive) creates .DocumentRevisions-V100
+    for the data volume at startup; in the cold passes it happened to start a few seconds before
+    the seed's lookup, in the real app it starts only at that lookup and the lookup fails."""
+    docid_state("before kick")
+    code = run(["xcrun", "simctl", "spawn", device, "launchctl", "kickstart", "system/com.apple.revisiond"],
+               "kickstart", check=False)
+    if code:
+        run(["xcrun", "simctl", "spawn", device, "launchctl", "start", "com.apple.revisiond"],
+            "launchctl-start", check=False)
+    started = time.monotonic()
+    while time.monotonic() - started < seconds:
+        state = docid_state("kick poll")
+        if state["library_status"]:
+            time.sleep(3)
+            return round(time.monotonic() - started, 1)
+        time.sleep(2)
+    return None
+
+
 def test(method, label):
     expected = f"DocumentUITests/{method}"
     result = out / f"{label}.xcresult"
@@ -198,6 +219,10 @@ try:
     folder = data_container("initial-container") / "Documents"
     folder.mkdir(exist_ok=True)
     seed = folder / "seed.docprobe"
+    if mode == "kick":
+        kicked = kick()
+        (out / "kick.json").write_text(json.dumps(dict(seconds_until_library=kicked), indent=2))
+        assert kicked is not None, "starting revisiond did not create its library"
     run(["xcrun", "simctl", "launch", "--console", device, bundle_id], "seed",
         env=dict(os.environ, SIMCTL_CHILD_DOCUMENT_PROBE_SEED=str(seed)))
     assert seed.read_bytes() == b"0\n"
@@ -218,7 +243,7 @@ try:
         docid_state("after recreating the seed", seed)
         test("testOpenSeed", "open-seed")
         test("testCreateEditAndReopen", "create-save")
-    else:
+    else:  # cold, and kick (which only differs before the seed exists)
         test("testOpenSeed", "open-seed")
         test("testCreateEditAndReopen", "create-save")
     final_seed = data_container("final-container") / "Documents/seed.docprobe"
