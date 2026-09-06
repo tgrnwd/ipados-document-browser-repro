@@ -1,0 +1,52 @@
+name: iPad document browser
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        description: Compare the cold seed with a fresh seed after document initialization
+        options: [both, cold, prepared]
+        default: both
+permissions:
+  contents: read
+concurrency:
+  group: document-browser
+  cancel-in-progress: false
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ${{ fromJSON(inputs.mode == 'both' && '["cold","prepared"]' || format('["{0}"]', inputs.mode)) }}
+    runs-on: macos-26
+    timeout-minutes: 55
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build and test this reproducer
+        timeout-minutes: 45
+        env:
+          REPRO_MODE: ${{ matrix.mode }}
+        run: python3 ci/run.py "$REPRO_MODE"
+      - name: Compress video
+        if: always()
+        timeout-minutes: 3
+        run: |
+          if test -f results/session.mov && command -v ffmpeg >/dev/null; then
+            ffmpeg -nostdin -v error -i results/session.mov -vf 'scale=-2:720,fps=10' \
+              -c:v libx264 -threads 1 -preset fast -crf 28 -an -movflags +faststart results/session.mp4
+            rm results/session.mov
+          fi
+      - name: Save video, logs and native test results
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: document-browser-${{ matrix.mode }}-${{ github.run_id }}
+          path: |
+            results/
+          retention-days: 1
+          if-no-files-found: error
