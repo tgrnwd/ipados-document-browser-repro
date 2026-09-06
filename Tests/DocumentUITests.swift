@@ -69,6 +69,31 @@ final class DocumentUITests: XCTestCase {
         XCTAssertEqual(value.label, "Value: 0")
     }
 
+    /// Create documents repeatedly through the browser, terminating and relaunching
+    /// between creations as a real suite of document tests does. Every outcome is
+    /// printed; the harness counts them. Nothing is deleted between creations.
+    @MainActor func testCreateRepeatedly() throws {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        let value = app.staticTexts["counterValue"]
+        var successes = 0
+        for i in 1...8 {
+            launch(app)
+            let create = app.buttons["Create Document"].firstMatch
+            XCTAssertTrue(create.waitForExistence(timeout: 30), "Create Document button missing at creation \(i)")
+            create.tap()
+            let deadline = Date().addingTimeInterval(25)
+            while Date() < deadline && !value.exists && !app.alerts.firstMatch.exists {
+                Thread.sleep(forTimeInterval: 0.2)
+            }
+            let outcome = value.exists ? "content" : app.alerts.firstMatch.exists ? "importAlert" : "timeout"
+            if value.exists { successes += 1 }
+            print("DOCUMENT-STRESS creation=\(i) outcome=\(outcome)")
+            app.terminate()
+        }
+        XCTAssertGreaterThan(successes, 0, "no creation ever reached document content")
+    }
+
     @MainActor func testCreateEditAndReopen() throws {
         let app = XCUIApplication()
         defer { app.terminate() }

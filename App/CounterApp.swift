@@ -43,6 +43,16 @@ struct CounterView: View {
 
 @main struct CounterApp: App {
     init() {
+        if ProcessInfo.processInfo.environment["DOCUMENT_PROBE_LOAD"] == "1" {
+            // Mimic an app that does real work at launch (an audio engine, model
+            // loading): three threads spinning for the life of the process.
+            for _ in 0..<3 {
+                Thread.detachNewThread {
+                    var x: UInt64 = 0x9E3779B97F4A7C15
+                    while true { x = x &* 6364136223846793005 &+ 1442695040888963407; if x == 0 { break } }
+                }
+            }
+        }
         #if DEBUG
         if let path = ProcessInfo.processInfo.environment["DOCUMENT_PROBE_SEED"] {
             do {

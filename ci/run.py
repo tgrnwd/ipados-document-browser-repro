@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Run only this standalone reproducer, on a disposable GitHub-hosted Mac."""
 import hashlib
+import re
 import json
 import os
 from pathlib import Path
@@ -13,7 +14,8 @@ import time
 if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
     raise SystemExit("Run this through the manual GitHub Actions workflow.")
 mode = sys.argv[1]
-assert mode in ("cold", "prepared", "warm", "kick", "openurl", "version")
+assert mode in ("cold", "prepared", "warm", "kick", "openurl", "version",
+                "stress", "stress-load", "stress-nokey", "stress-nokey-load")
 # sys/stat.h: "UF_TRACKED is used for dealing with document IDs."
 UF_TRACKED = 0x40
 root = Path.cwd()
@@ -193,6 +195,11 @@ try:
     run(["sw_vers"], "macos")
     run(["sysctl", "hw.ncpu", "hw.memsize"], "hardware")
     (out / "image.json").write_text(json.dumps({key: os.environ.get(key) for key in ("ImageOS", "ImageVersion", "GITHUB_SHA")}))
+    if "nokey" in mode:
+        # Photoslop #228 (2026-08): LSSupportsOpeningDocumentsInPlace without
+        # UIFileSharingEnabled could not create documents on a fresh simulator.
+        run(["plutil", "-remove", "UIFileSharingEnabled", "App/Info.plist"], "plist-remove-filesharing")
+    run(["plutil", "-p", "App/Info.plist"], "plist")
     run(["xcodebuild", "build-for-testing", "-project", "DocumentBrowserProbe.xcodeproj",
          "-scheme", "DocumentBrowserProbe", "-destination", "generic/platform=iOS Simulator",
          "-derivedDataPath", ".build", "ARCHS=arm64"], "build", timeout=600)
@@ -253,6 +260,24 @@ try:
         docid_state("after recreating the seed", seed)
         test("testOpenSeed", "open-seed")
         test("testCreateEditAndReopen", "create-save")
+    elif mode.startswith("stress"):
+        env_extra = dict(os.environ)
+        # The test target inherits the runner's environment via the xctestrun's
+        # UITargetAppEnvironmentVariables only when written there; pass it through
+        # the launch environment instead by editing the manifest.
+        import plistlib
+        manifest_data = plistlib.loads(manifest.read_bytes())
+        for config in manifest_data.get("TestConfigurations", []):
+            for target in config.get("TestTargets", []):
+                target.setdefault("UITargetAppEnvironmentVariables", {})["DOCUMENT_PROBE_LOAD"] = "1" if "load" in mode else "0"
+        stressed = manifest.with_name("Stress.xctestrun")
+        stressed.write_bytes(plistlib.dumps(manifest_data))
+        manifest = stressed
+        test("testCreateRepeatedly", "create-repeatedly")
+        outcomes = re.findall(r"DOCUMENT-STRESS creation=(\d+) outcome=(\w+)", (out / "create-repeatedly.log").read_text(errors="replace"))
+        (out / "stress.json").write_text(json.dumps(dict(mode=mode, outcomes=outcomes,
+            alerts=sum(1 for _, o in outcomes if o == "importAlert"), total=len(outcomes)), indent=2))
+        print(json.dumps(json.loads((out / "stress.json").read_text())), flush=True)
     elif mode == "openurl":
         # Two documented file-URL deliveries, no browser: from XCTest, then from the host.
         test("testOpenSeedByURL", "open-seed")
@@ -267,7 +292,8 @@ try:
     final_seed = data_container("final-container") / "Documents/seed.docprobe"
     docid_state("after all tests", final_seed)
     assert final_seed.read_bytes() == b"0\n"
-    assert len(stages) == 2 and all(stage["passed"] for stage in stages), "UI tests failed"
+    expected_stages = 1 if mode.startswith("stress") else 2
+    assert len(stages) == expected_stages and all(stage["passed"] for stage in stages), "UI tests failed"
 except BaseException as error:
     print(f"::error::{type(error).__name__}: {error}", flush=True)
     (out / "error.txt").write_text(f"{type(error).__name__}: {error}\n")
@@ -285,4 +311,4 @@ finally:
             summary.write(f"- {stage['method']}: **{'PASS' if stage['passed'] else 'FAIL'}**\n")
         if (out / "error.txt").exists():
             summary.write("\n"+(out / "error.txt").read_text())
-sys.exit(0 if len(stages) == 2 and all(stage["passed"] for stage in stages) and not (out / "error.txt").exists() else 1)
+sys.exit(0 if len(stages) == (1 if mode.startswith("stress") else 2) and all(stage["passed"] for stage in stages) and not (out / "error.txt").exists() else 1)
