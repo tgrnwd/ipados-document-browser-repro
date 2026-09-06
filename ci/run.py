@@ -110,20 +110,22 @@ def recreate_seed(label):
     return seed
 
 
-def warm(seed, seconds=120):
+def warm(seed, seconds=300):
     """Prime revisiond's library without any UI test: launch the app normally so the document
     browser appears, and wait until the seed carries a document ID or the library exists."""
     run(["xcrun", "simctl", "launch", device, bundle_id], "warm-launch")
     started = time.monotonic()
     observed = None
+    # A plain launch shows Recents, which does not enumerate the app container, so the seed
+    # stays untracked; revisiond's library still appeared about 130 s after launch (run
+    # 34008028659). Wait for the library itself; LibraryStatus is written at the end of init.
     while time.monotonic() - started < seconds:
         state = docid_state("warm poll", seed)
-        if state["files"][str(seed)] or state["library_status"]:
+        if state["library_status"]:
             observed = round(time.monotonic() - started, 1)
             break
-        time.sleep(3)
-    # Library initialization was measured at about nine seconds after its directory appeared.
-    time.sleep(20)
+        time.sleep(5)
+    time.sleep(15)
     final = docid_state("warm settled", seed)
     run(["xcrun", "simctl", "terminate", device, bundle_id], "warm-terminate", check=False)
     (out / "warm.json").write_text(json.dumps(dict(seconds_until_observed=observed, final=final), indent=2))
@@ -211,7 +213,7 @@ try:
         # allocate the seed's document ID and let revisiond create its library. Then the seed
         # is recreated (new inode) and the tests run in the cold order.
         observed = warm(seed)
-        assert observed is not None, "plain launch never allocated a document ID or created the library"
+        assert observed is not None, "plain launch never led to revisiond creating its library"
         seed = recreate_seed("warm")
         docid_state("after recreating the seed", seed)
         test("testOpenSeed", "open-seed")
