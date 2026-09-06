@@ -4,8 +4,8 @@ on:
     inputs:
       mode:
         type: choice
-        description: Compare the cold seed with a fresh seed after document initialization
-        options: [both, cold, prepared]
+        description: Compare the cold seed with a fresh seed after document initialization; warm primes with a plain launch only
+        options: [both, cold, prepared, warm]
         default: both
 permissions:
   contents: read
