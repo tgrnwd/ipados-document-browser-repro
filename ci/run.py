@@ -13,7 +13,7 @@ import time
 if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
     raise SystemExit("Run this through the manual GitHub Actions workflow.")
 mode = sys.argv[1]
-assert mode in ("cold", "prepared", "warm", "kick", "openurl")
+assert mode in ("cold", "prepared", "warm", "kick", "openurl", "version")
 # sys/stat.h: "UF_TRACKED is used for dealing with document IDs."
 UF_TRACKED = 0x40
 root = Path.cwd()
@@ -231,8 +231,10 @@ try:
         kicked = kick()
         (out / "kick.json").write_text(json.dumps(dict(seconds_until_library=kicked), indent=2))
         assert kicked is not None, "starting revisiond did not create its library"
-    run(["xcrun", "simctl", "launch", "--console", device, bundle_id], "seed",
-        env=dict(os.environ, SIMCTL_CHILD_DOCUMENT_PROBE_SEED=str(seed)))
+    seed_env = dict(os.environ, SIMCTL_CHILD_DOCUMENT_PROBE_SEED=str(seed))
+    if mode == "version":
+        seed_env["SIMCTL_CHILD_DOCUMENT_PROBE_SEED_VERSION"] = "1"
+    run(["xcrun", "simctl", "launch", "--console", device, bundle_id], "seed", env=seed_env)
     assert seed.read_bytes() == b"0\n"
     docid_state("after seed export", seed)
     if mode == "prepared":
@@ -259,7 +261,7 @@ try:
         docid_state("after simctl openurl", seed)
         run(["xcrun", "simctl", "terminate", device, bundle_id], "terminate-after-openurl", check=False)
         test("testOpenSeed", "open-seed-browser")
-    else:  # cold, and kick (which only differs before the seed exists)
+    else:  # cold, kick and version (which only differ before or during seeding)
         test("testOpenSeed", "open-seed")
         test("testCreateEditAndReopen", "create-save")
     final_seed = data_container("final-container") / "Documents/seed.docprobe"

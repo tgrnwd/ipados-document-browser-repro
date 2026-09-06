@@ -5,7 +5,7 @@ on:
       mode:
         type: choice
         description: Compare the cold seed with a fresh seed after document initialization; warm primes with a plain launch only
-        options: [both, cold, prepared, warm, kick, openurl]
+        options: [both, cold, prepared, warm, kick, openurl, version]
         default: both
 permissions:
   contents: read

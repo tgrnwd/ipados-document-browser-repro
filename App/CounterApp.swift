@@ -46,7 +46,15 @@ struct CounterView: View {
         #if DEBUG
         if let path = ProcessInfo.processInfo.environment["DOCUMENT_PROBE_SEED"] {
             do {
-                try Data("0\n".utf8).write(to: URL(fileURLWithPath: path))
+                let url = URL(fileURLWithPath: path)
+                try Data("0\n".utf8).write(to: url)
+                if ProcessInfo.processInfo.environment["DOCUMENT_PROBE_SEED_VERSION"] == "1" {
+                    // Public document-versions API: registers the file with revisiond, which
+                    // allocates its document ID and creates the per-volume library, before any
+                    // browser enumeration can allocate an ID that nothing records.
+                    let version = try NSFileVersion.addOfItem(at: url, withContentsOf: url, options: [])
+                    print("seed version added: \(String(describing: version.modificationDate))")
+                }
                 exit(0)
             } catch {
                 fputs("Seed export failed: \(error)\n", stderr)
