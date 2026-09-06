@@ -56,6 +56,19 @@ final class DocumentUITests: XCTestCase {
         XCTAssertEqual(value.label, "Value: 0")
     }
 
+    /// The documented iOS entrance: the system hands the app a file URL to open (the same
+    /// path as "Open in" from Files). No document browser, no bookmark, no resolver.
+    @MainActor func testOpenSeedByURL() throws {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        launch(app)
+        let seed = try documents().appendingPathComponent("seed.docprobe")
+        XCUIDevice.shared.system.open(seed)
+        let value = app.staticTexts["counterValue"]
+        XCTAssertTrue(value.waitForExistence(timeout: 30), "Seed never reached document content via system open")
+        XCTAssertEqual(value.label, "Value: 0")
+    }
+
     @MainActor func testCreateEditAndReopen() throws {
         let app = XCUIApplication()
         defer { app.terminate() }

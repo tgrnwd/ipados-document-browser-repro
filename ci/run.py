@@ -13,7 +13,7 @@ import time
 if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
     raise SystemExit("Run this through the manual GitHub Actions workflow.")
 mode = sys.argv[1]
-assert mode in ("cold", "prepared", "warm", "kick")
+assert mode in ("cold", "prepared", "warm", "kick", "openurl")
 # sys/stat.h: "UF_TRACKED is used for dealing with document IDs."
 UF_TRACKED = 0x40
 root = Path.cwd()
@@ -251,6 +251,14 @@ try:
         docid_state("after recreating the seed", seed)
         test("testOpenSeed", "open-seed")
         test("testCreateEditAndReopen", "create-save")
+    elif mode == "openurl":
+        # Two documented file-URL deliveries, no browser: from XCTest, then from the host.
+        test("testOpenSeedByURL", "open-seed")
+        run(["xcrun", "simctl", "openurl", device, "file://" + str(seed)], "simctl-openurl", check=False)
+        time.sleep(10)
+        docid_state("after simctl openurl", seed)
+        run(["xcrun", "simctl", "terminate", device, bundle_id], "terminate-after-openurl", check=False)
+        test("testOpenSeed", "open-seed-browser")
     else:  # cold, and kick (which only differs before the seed exists)
         test("testOpenSeed", "open-seed")
         test("testCreateEditAndReopen", "create-save")
