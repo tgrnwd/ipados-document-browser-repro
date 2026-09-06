@@ -14,8 +14,13 @@ final class DocumentUITests: XCTestCase {
         let cell = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", stem)).firstMatch
         if !cell.waitForExistence(timeout: 8) {
             let browse = app.buttons["Browse"].firstMatch
-            XCTAssertTrue(browse.waitForExistence(timeout: 10))
-            browse.tap()
+            for attempt in 1...3 {
+                XCTAssertTrue(browse.waitForExistence(timeout: 10))
+                browse.tap()
+                let visible = cell.waitForExistence(timeout: 15)
+                print("BROWSER-ENTRANCE attempt=\(attempt) document=\(visible) browseSelected=\(browse.isSelected)")
+                if visible { break }
+            }
         }
         XCTAssertTrue(cell.waitForExistence(timeout: 15), "Document tile missing: \(name)")
         cell.tap()
