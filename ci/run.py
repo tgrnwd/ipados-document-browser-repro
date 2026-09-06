@@ -15,7 +15,7 @@ if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONM
     raise SystemExit("Run this through the manual GitHub Actions workflow.")
 mode = sys.argv[1]
 assert mode in ("cold", "prepared", "warm", "kick", "openurl", "version",
-                "stress", "stress-load", "stress-nokey", "stress-nokey-load", "stress-json", "stress-folder")
+                "stress", "stress-load", "stress-nokey", "stress-nokey-load", "stress-json", "stress-folder", "stress-json-type", "stress-json-body")
 # sys/stat.h: "UF_TRACKED is used for dealing with document IDs."
 UF_TRACKED = 0x40
 root = Path.cwd()
@@ -199,7 +199,7 @@ try:
         # Photoslop #228 (2026-08): LSSupportsOpeningDocumentsInPlace without
         # UIFileSharingEnabled could not create documents on a fresh simulator.
         run(["plutil", "-remove", "UIFileSharingEnabled", "App/Info.plist"], "plist-remove-filesharing")
-    if "json" in mode:
+    if mode in ("stress-json", "stress-json-type"):
         # The real app's document type conforms to public.json (a text type that
         # gets QuickLook thumbnails); the repro's conforms to public.data.
         run(["plutil", "-replace", "UTExportedTypeDeclarations.0.UTTypeConformsTo", "-json", '["public.json"]', "App/Info.plist"], "plist-json-conformance")
@@ -275,7 +275,7 @@ try:
             for target in config.get("TestTargets", []):
                 env = target.setdefault("UITargetAppEnvironmentVariables", {})
                 env["DOCUMENT_PROBE_LOAD"] = "1" if "load" in mode else "0"
-                env["DOCUMENT_PROBE_JSON"] = "1" if "json" in mode else "0"
+                env["DOCUMENT_PROBE_JSON"] = "1" if mode in ("stress-json", "stress-json-body") else "0"
                 env["DOCUMENT_PROBE_FOLDER"] = "1" if "folder" in mode else "0"
         stressed = manifest.with_name("Stress.xctestrun")
         stressed.write_bytes(plistlib.dumps(manifest_data))

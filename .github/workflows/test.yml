@@ -5,7 +5,7 @@ on:
       mode:
         type: choice
         description: Compare the cold seed with a fresh seed after document initialization; warm primes with a plain launch only
-        options: [both, cold, prepared, warm, kick, openurl, version, stress, stress-load, stress-nokey, stress-nokey-load, stress-json, stress-folder]
+        options: [both, cold, prepared, warm, kick, openurl, version, stress, stress-load, stress-nokey, stress-nokey-load, stress-json, stress-folder, stress-json-type, stress-json-body]
         default: both
 permissions:
   contents: read
