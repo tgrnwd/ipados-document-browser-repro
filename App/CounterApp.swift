@@ -52,8 +52,12 @@ struct CounterView: View {
                     // Public document-versions API: registers the file with revisiond, which
                     // allocates its document ID and creates the per-volume library, before any
                     // browser enumeration can allocate an ID that nothing records.
-                    let version = try NSFileVersion.addOfItem(at: url, withContentsOf: url, options: [])
-                    print("seed version added: \(String(describing: version.modificationDate))")
+                    // Adding versions is macOS-only; these two queries exist on iOS and go to
+                    // the same versions service. Log the kernel document identifier after them.
+                    let current = NSFileVersion.currentVersionOfItem(at: url)
+                    let others = NSFileVersion.otherVersionsOfItem(at: url)
+                    let identifier = try? url.resourceValues(forKeys: [.documentIdentifierKey]).documentIdentifier
+                    print("seed versions: current=\(current != nil) others=\(others?.count ?? -1) documentIdentifier=\(String(describing: identifier))")
                 }
                 exit(0)
             } catch {
