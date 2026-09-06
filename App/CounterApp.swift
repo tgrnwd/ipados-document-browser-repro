@@ -13,15 +13,25 @@ final class CounterDocument: ReferenceFileDocument {
     init() { value = 0 }
     required init(configuration: ReadConfiguration) throws {
         guard let data = configuration.file.regularFileContents,
-              let text = String(data: data, encoding: .utf8),
-              let number = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+              let text = String(data: data, encoding: .utf8) else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        value = number
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let number = object["value"] as? Int {
+            value = number
+        } else if let number = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            value = number
+        } else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
     }
     func snapshot(contentType: UTType) throws -> Int { value }
     func fileWrapper(snapshot: Int, configuration: WriteConfiguration) throws -> FileWrapper {
-        FileWrapper(regularFileWithContents: Data("\(snapshot)\n".utf8))
+        if ProcessInfo.processInfo.environment["DOCUMENT_PROBE_JSON"] == "1" {
+            // A ~1 KB JSON body, like a real rig document.
+            let padding = String(repeating: "x", count: 900)
+            return FileWrapper(regularFileWithContents: Data("{\"value\": \(snapshot), \"padding\": \"\(padding)\"}\n".utf8))
+        }
+        return FileWrapper(regularFileWithContents: Data("\(snapshot)\n".utf8))
     }
 }
 
@@ -43,6 +53,13 @@ struct CounterView: View {
 
 @main struct CounterApp: App {
     init() {
+        if ProcessInfo.processInfo.environment["DOCUMENT_PROBE_FOLDER"] == "1" {
+            // Like an app that keeps a downloads folder inside Documents and
+            // ensures it exists at every launch.
+            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            try? FileManager.default.createDirectory(at: documents.appendingPathComponent("Downloads"), withIntermediateDirectories: true)
+            try? Data("\(Date())\n".utf8).write(to: documents.appendingPathComponent("Downloads/.launched"))
+        }
         if ProcessInfo.processInfo.environment["DOCUMENT_PROBE_LOAD"] == "1" {
             // Mimic an app that does real work at launch (an audio engine, model
             // loading): three threads spinning for the life of the process.
